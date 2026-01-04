@@ -552,7 +552,7 @@ class EmailReader {
         });
     }
 
-    // Buscar el último correo para un email específico (versión simple - último correo)
+    // Buscar el último correo para un email específico (versión simple - búsqueda global)
     async buscarUltimoCorreo(email) {
         if (!this.imap || !this.isRunning) {
             throw new Error('El lector de correos no está conectado');
@@ -561,79 +561,115 @@ class EmailReader {
         console.log(`🔍 Buscando último correo para: ${email}`);
         
         return new Promise((resolve, reject) => {
-            // Búsqueda simple: últimas 2 horas, cualquier correo para el email
-            const fechaLimite = new Date(Date.now() - 2 * 60 * 60 * 1000);
+            // Búsqueda simple: últimas 24 horas, cualquier correo para el email
+            const fechaLimite = new Date(Date.now() - 24 * 60 * 60 * 1000);
             const searchCriteria = [
                 ['SINCE', fechaLimite],
                 ['TO', email]
             ];
 
-            this.imap.openBox('INBOX', false, (err, box) => {
+            // Buscar en TODAS las carpetas disponibles
+            this.imap.getBoxes((err, boxes) => {
                 if (err) {
-                    console.error('❌ Error abriendo INBOX:', err);
+                    console.log('❌ Error obteniendo carpetas:', err);
                     resolve(null);
                     return;
                 }
 
-                console.log(`🔍 Buscando último correo (2 horas) para: ${email}`);
+                console.log(`📁 Carpetas disponibles:`, Object.keys(boxes));
+                
+                // Buscar recursivamente en todas las carpetas
+                this.buscarEnTodasLasCarpetas(boxes, searchCriteria, email, resolve);
+            });
+        });
+    }
 
-                this.imap.search(searchCriteria, (err, results) => {
-                    if (err) {
-                        console.error('❌ Error en búsqueda:', err);
-                        resolve(null);
-                        return;
-                    }
+    // Buscar recursivamente en todas las carpetas
+    buscarEnTodasLasCarpetas(boxes, searchCriteria, email, resolve, index = 0) {
+        const carpetas = Object.keys(boxes);
+        
+        if (index >= carpetas.length) {
+            console.log(`📭 No hay correos recientes en ninguna carpeta para: ${email}`);
+            resolve(null);
+            return;
+        }
 
-                    if (!results || results.length === 0) {
-                        console.log(`📭 No hay correos recientes para: ${email}`);
-                        resolve(null);
-                        return;
-                    }
+        const carpeta = carpetas[index];
+        console.log(`🔍 Buscando en carpeta ${index + 1}/${carpetas.length}: ${carpeta}`);
 
-                    console.log(`📧 Encontrados ${results.length} correos para ${email}`);
+        this.buscarEnCarpeta(carpeta, searchCriteria, email, resolve, () => {
+            // Si no encuentra en esta carpeta, continuar con la siguiente
+            this.buscarEnTodasLasCarpetas(boxes, searchCriteria, email, resolve, index + 1);
+        });
+    }
 
-                    // Ordenar por UID descendente y tomar el MÁS RECIENTE
-                    const sortedResults = results.sort((a, b) => b - a);
-                    const latestResult = sortedResults[0];
-                    
-                    console.log(`🔍 Procesando correo más reciente`);
-                    
-                    // Descargar y procesar el correo más reciente
-                    const fetch = this.imap.fetch(latestResult, { bodies: '' });
-                    
-                    fetch.on('message', (msg, seqno) => {
-                        msg.on('body', async (stream, info) => {
-                            try {
-                                const parsed = await simpleParser(stream);
-                                
-                                const cuerpo = parsed.text || '';
-                                const asunto = parsed.subject || '';
-                                const codigos = this.extraerCodigosDisney(cuerpo, asunto);
-                                
-                                if (codigos.length > 0) {
-                                    console.log(`✅ Código encontrado para ${email}: ${codigos[0]}`);
-                                    resolve({ 
-                                        codigos: codigos, 
-                                        servicio: 'disney+',
-                                        to: email
-                                    });
-                                    return;
-                                } else {
-                                    console.log(`📧 Correo más reciente no tiene código válido`);
-                                    resolve(null);
-                                }
-                                
-                            } catch (error) {
-                                console.log(`⚠️ Error procesando correo: ${error.message}`);
-                                resolve(null);
+    // Buscar en una carpeta específica
+    buscarEnCarpeta(carpeta, searchCriteria, email, resolve, callback) {
+        this.imap.openBox(carpeta, false, (err, box) => {
+            if (err) {
+                console.log(`⚠️ No se pudo abrir ${carpeta}: ${err.message}`);
+                callback();
+                return;
+            }
+
+            console.log(`🔍 Buscando en ${carpeta} (24 horas) para: ${email}`);
+
+            this.imap.search(searchCriteria, (err, results) => {
+                if (err) {
+                    console.log(`⚠️ Error buscando en ${carpeta}: ${err.message}`);
+                    callback();
+                    return;
+                }
+
+                if (!results || results.length === 0) {
+                    console.log(`📭 No hay correos en ${carpeta} para: ${email}`);
+                    callback();
+                    return;
+                }
+
+                console.log(`📧 Encontrados ${results.length} correos en ${carpeta} para ${email}`);
+
+                // Ordenar por UID descendente y tomar el MÁS RECIENTE
+                const sortedResults = results.sort((a, b) => b - a);
+                const latestResult = sortedResults[0];
+                
+                console.log(`🔍 Procesando correo más reciente de ${carpeta}`);
+                
+                // Descargar y procesar el correo más reciente
+                const fetch = this.imap.fetch(latestResult, { bodies: '' });
+                
+                fetch.on('message', (msg, seqno) => {
+                    msg.on('body', async (stream, info) => {
+                        try {
+                            const parsed = await simpleParser(stream);
+                            
+                            const cuerpo = parsed.text || '';
+                            const asunto = parsed.subject || '';
+                            const codigos = this.extraerCodigosDisney(cuerpo, asunto);
+                            
+                            if (codigos.length > 0) {
+                                console.log(`✅ Código encontrado para ${email} en ${carpeta}: ${codigos[0]}`);
+                                resolve({ 
+                                    codigos: codigos, 
+                                    servicio: 'disney+',
+                                    to: email
+                                });
+                                return;
+                            } else {
+                                console.log(`📧 Correo más reciente en ${carpeta} no tiene código válido`);
+                                callback();
                             }
-                        });
+                            
+                        } catch (error) {
+                            console.log(`⚠️ Error procesando correo en ${carpeta}: ${error.message}`);
+                            callback();
+                        }
                     });
+                });
 
-                    fetch.once('error', (err) => {
-                        console.log(`⚠️ Error fetching: ${err.message}`);
-                        resolve(null);
-                    });
+                fetch.once('error', (err) => {
+                    console.log(`⚠️ Error fetching en ${carpeta}: ${err.message}`);
+                    callback();
                 });
             });
         });
