@@ -13,12 +13,15 @@ class EmailReader {
     getImapConfig() {
         return {
             user: process.env.GMAIL_USER,
-            password: process.env.GMAIL_PASSWORD,
+            password: process.env.GMAIL_PASS,
             host: process.env.IMAP_HOST || 'imap.gmail.com',
             port: parseInt(process.env.IMAP_PORT) || 993,
             tls: true,
-            tlsOptions: { rejectUnauthorized: false },
-            connTimeout: 60000, // 60 segundos
+            tlsOptions: { 
+                rejectUnauthorized: false,
+                servername: 'imap.gmail.com'
+            },
+            connTimeout: 30000, // 30 segundos
             authTimeout: 30000,  // 30 segundos
             keepalive: {
                 interval: 10000, // 10 segundos
