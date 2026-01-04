@@ -1,0 +1,184 @@
+body {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    min-height: 100vh;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+}
+
+.logo-container {
+    margin-bottom: 2rem;
+}
+
+.logo {
+    height: 80px;
+    filter: drop-shadow(0 4px 8px rgba(0,0,0,0.3));
+    transition: transform 0.3s ease;
+}
+
+.logo:hover {
+    transform: scale(1.05);
+}
+
+.disney-info {
+    background: linear-gradient(45deg, #1e3c72, #2a5298);
+    color: white;
+    padding: 0.75rem;
+    border-radius: 8px;
+    margin-top: 0.75rem;
+    border-left: 4px solid #0066cc;
+    font-weight: 500;
+}
+
+.dominios-info {
+    margin-top: 1rem;
+}
+
+.dominios-info .badge {
+    font-size: 0.9rem;
+    padding: 0.5rem 1rem;
+    background: linear-gradient(45deg, #667eea, #764ba2) !important;
+}
+
+.main-title {
+    color: white;
+    font-weight: 700;
+    text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+    margin-bottom: 1rem;
+}
+
+.lead {
+    color: rgba(255,255,255,0.9);
+    font-size: 1.1rem;
+}
+
+.card {
+    border: none;
+    border-radius: 15px;
+    background: rgba(255,255,255,0.95);
+    backdrop-filter: blur(10px);
+}
+
+.card-body {
+    border-radius: 15px;
+}
+
+.form-control {
+    border-radius: 10px;
+    border: 2px solid #e0e0e0;
+    transition: all 0.3s ease;
+}
+
+.form-control:focus {
+    border-color: #667eea;
+    box-shadow: 0 0 0 0.2rem rgba(102, 126, 234, 0.25);
+}
+
+.btn-primary {
+    background: linear-gradient(45deg, #667eea, #764ba2);
+    border: none;
+    border-radius: 10px;
+    font-weight: 600;
+    transition: all 0.3s ease;
+}
+
+.btn-primary:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+}
+
+.btn-primary:disabled {
+    transform: none;
+    box-shadow: none;
+}
+
+.codigo-item {
+    background: #f8f9fa;
+    border-left: 4px solid #667eea;
+    padding: 1rem;
+    margin-bottom: 1rem;
+    border-radius: 8px;
+    transition: all 0.3s ease;
+}
+
+.codigo-item:hover {
+    transform: translateX(5px);
+    box-shadow: 0 3px 10px rgba(0,0,0,0.1);
+}
+
+.codigo-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 0.5rem;
+}
+
+.codigo-valor {
+    font-family: 'Courier New', monospace;
+    font-size: 1.8rem;
+    font-weight: bold;
+    color: #2c3e50;
+    background: white;
+    padding: 0.75rem;
+    border-radius: 8px;
+    border: 2px solid #dee2e6;
+    letter-spacing: 0.1em;
+    min-width: 120px;
+    text-align: center;
+}
+
+.codigo-info {
+    font-size: 0.9rem;
+    color: #6c757d;
+}
+
+.mensaje-original {
+    font-style: italic;
+    color: #495057;
+    background: rgba(102, 126, 234, 0.1);
+    padding: 0.5rem;
+    border-radius: 5px;
+    margin-top: 0.5rem;
+    border-left: 3px solid #667eea;
+}
+
+.copy-btn {
+    background: #28a745;
+    color: white;
+    border: none;
+    padding: 0.25rem 0.75rem;
+    border-radius: 5px;
+    font-size: 0.8rem;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.copy-btn:hover {
+    background: #218838;
+    transform: scale(1.05);
+}
+
+.copy-btn.copied {
+    background: #6c757d;
+}
+
+.alert {
+    border-radius: 10px;
+    border: none;
+}
+
+footer {
+    color: rgba(255,255,255,0.8);
+}
+
+@media (max-width: 768px) {
+    .container {
+        padding: 0 1rem;
+    }
+    
+    .card-body {
+        padding: 2rem !important;
+    }
+    
+    .main-title {
+        font-size: 2rem;
+    }
+}

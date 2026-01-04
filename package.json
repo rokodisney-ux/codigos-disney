@@ -1,0 +1,31 @@
+{
+  "name": "consulta-codigos-backend",
+  "version": "1.0.0",
+  "description": "Backend para consulta de códigos de verificación desde Gmail",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "nodemon server.js",
+    "build": "echo 'No build step needed for Node.js'",
+    "prod": "NODE_ENV=production node server.js"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "dotenv": "^16.6.1",
+    "express": "^4.22.1",
+    "imap": "^0.8.19",
+    "mailparser": "^3.9.1",
+    "sqlite3": "^5.1.7"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.1"
+  },
+  "keywords": [
+    "gmail",
+    "verification-codes",
+    "nodejs",
+    "imap"
+  ],
+  "author": "RokoTV & RokoStream",
+  "license": "MIT"
+}

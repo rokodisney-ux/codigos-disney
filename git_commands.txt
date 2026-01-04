@@ -1,0 +1,19 @@
+# Comandos para Git Bash - Copiar y pegar
+
+# 1. Inicializar repositorio
+git init
+
+# 2. Agregar archivos
+git add .
+
+# 3. Hacer commit
+git commit -m "Sistema de códigos Disney+ listo para producción"
+
+# 4. Crear rama main
+git branch -M main
+
+# 5. Conectar con GitHub (reemplaza tuusuario)
+git remote add origin https://github.com/tuusuario/codigos-disney.git
+
+# 6. Subir a GitHub
+git push -u origin main

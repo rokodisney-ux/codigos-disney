@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Consulta de Códigos</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <header class="text-center py-5">
+            <div class="logo-container mb-4">
+                <img src="data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAwIiBoZWlnaHQ9IjgwIiB2aWV3Qm94PSIwIDAgMjAwIDgwIiBmaWxsPSJub25lIiB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciPgo8cmVjdCB3aWR0aD0iMjAwIiBoZWlnaHQ9IjgwIiByeD0iMTAiIGZpbGw9InVybCgjZ3JhZGllbnQwXzFfMSkiLz4KPHN2ZyB3aWR0aD0iNjAiIGhlaWdodD0iNDAiIHZpZXdCb3g9IjAgMCA2MCA0MCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIiB4PSI3MCIgeT0iMjAiPgo8dGV4dCB4PSIzMCIgeT0iMjUiIGZvbnQtZmFtaWx5PSJBcmlhbCIgZm9udC1zaXplPSIxOCIgZm9udC13ZWlnaHQ9ImJvbGQiIGZpbGw9IndoaXRlIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIj5Sb2tvPC90ZXh0Pgo8dGV4dCB4PSIzMCIgeT0iMzgiIGZvbnQtZmFtaWx5PSJBcmlhbCIgZm9udC1zaXplPSIxNCIgZmlsbD0id2hpdGUiIHRleHQtYW5jaG9yPSJtaWRkbGUiPlN0cmVhbWluZzwvdGV4dD4KPC9zdmc+CjxkZWZzPgo8bGluZWFyR3JhZGllbnQgaWQ9ImdyYWRpZW50MF8xXzEiIHgxPSIwIiB5MT0iMCIgeDI9IjIwMCIgeTI9IjgwIiBncmFkaWVudFVuaXRzPSJ1c2VyU3BhY2VPblVzZSI+CjxzdG9wIHN0b3AtY29sb3I9IiM2NjdlZWEiLz4KPHN0b3Agb2Zmc2V0PSIxIiBzdG9wLWNvbG9yPSIjNzY0YmEyIi8+CjwvbGluZWFyR3JhZGllbnQ+CjwvZGVmcz4KPC9zdmc+" alt="RokoStreaming Logo" class="logo">
+            </div>
+            <h1 class="main-title">Consulta de Códigos Disney+</h1>
+            <p class="lead">Ingresa tu correo de <strong>rokotv.xyz</strong> o <strong>rokostream.com</strong> para obtener tu último código de Disney+</p>
+            <div class="dominios-info">
+                <span class="badge bg-primary me-2">rokotv.xyz</span>
+                <span class="badge bg-primary">rokostream.com</span>
+            </div>
+            <div class="mt-3">
+                <small class="text-white-50">⏰ Los códigos de Disney+ vencen en 15 minutos</small>
+            </div>
+        </header>
+
+        <main class="row justify-content-center">
+            <div class="col-md-8 col-lg-6">
+                <div class="card shadow-lg">
+                    <div class="card-body p-5">
+                        <form id="consultaForm">
+                            <div class="mb-4">
+                                <label for="email" class="form-label fw-bold">Correo Electrónico</label>
+                                <input type="email" class="form-control form-control-lg" id="email" 
+                                       placeholder="tu@rokotv.xyz o tu@rokostream.com" required>
+                                <div class="form-text">Solo se permiten correos de los dominios autorizados. Se mostrará el último código de Disney+ recibido.</div>
+                            </div>
+                            
+                            <button type="submit" class="btn btn-primary btn-lg w-100">
+                                <span class="spinner-border spinner-border-sm d-none" id="loadingSpinner"></span>
+                                Consultar Códigos
+                            </button>
+                        </form>
+
+                        <div id="resultado" class="mt-4 d-none">
+                            <h4 class="mb-3">Último Código de Disney+</h4>
+                            <div id="codigosList"></div>
+                        </div>
+
+                        <div id="error" class="mt-4 d-none">
+                            <div class="alert alert-danger">
+                                <strong>Error:</strong> <span id="errorMessage"></span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+
+        <footer class="text-center py-4 mt-5">
+            <p class="text-muted">&copy; 2026 Sistema de Consulta de Códigos</p>
+        </footer>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="script-api.js"></script>
+</body>
+</html>
