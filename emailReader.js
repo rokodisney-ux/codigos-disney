@@ -552,7 +552,7 @@ class EmailReader {
         });
     }
 
-    // Buscar el último correo para un email específico (versión con timeout)
+    // Buscar el último correo para un email específico (versión simple - último correo)
     async buscarUltimoCorreo(email) {
         if (!this.imap || !this.isRunning) {
             throw new Error('El lector de correos no está conectado');
@@ -561,14 +561,8 @@ class EmailReader {
         console.log(`🔍 Buscando último correo para: ${email}`);
         
         return new Promise((resolve, reject) => {
-            // Timeout de 30 segundos para dar más tiempo a Gmail
-            const timeout = setTimeout(() => {
-                console.log(`⏰ Timeout en la búsqueda para ${email}`);
-                // No resolver null, dejar que continúe la búsqueda
-            }, 30000);
-
-            // Buscar correos de las últimas 24 horas
-            const fechaLimite = new Date(Date.now() - 24 * 60 * 60 * 1000);
+            // Búsqueda simple: últimos 20 minutos, cualquier correo para el email
+            const fechaLimite = new Date(Date.now() - 20 * 60 * 1000);
             const searchCriteria = [
                 ['SINCE', fechaLimite],
                 ['TO', email]
@@ -576,52 +570,40 @@ class EmailReader {
 
             this.imap.openBox('INBOX', false, (err, box) => {
                 if (err) {
-                    clearTimeout(timeout);
                     console.error('❌ Error abriendo INBOX:', err);
                     resolve(null);
                     return;
                 }
 
-                console.log(`🔍 Buscando en INBOX correos para: ${email}`);
+                console.log(`🔍 Buscando último correo (20 min) para: ${email}`);
 
                 this.imap.search(searchCriteria, (err, results) => {
-                    clearTimeout(timeout);
-                    
                     if (err) {
                         console.error('❌ Error en búsqueda:', err);
                         resolve(null);
                         return;
                     }
 
-                    if (results.length === 0) {
-                        console.log(`📭 No hay correos para: ${email}`);
+                    if (!results || results.length === 0) {
+                        console.log(`📭 No hay correos recientes para: ${email}`);
                         resolve(null);
                         return;
                     }
 
-                    console.log(`📧 Encontrados ${results.length} correos para ${email}`);
-
-                    // Ordenar por UID descendente y tomar el más reciente
+                    // Ordenar por UID descendente y tomar el MÁS RECIENTE
                     const sortedResults = results.sort((a, b) => b - a);
                     const latestResult = sortedResults[0];
                     
-                    console.log(`🔍 Verificando correo más reciente`);
+                    console.log(`🔍 Procesando correo más reciente`);
                     
-                    // Timeout para el fetch - 20 segundos
-                    const fetchTimeout = setTimeout(() => {
-                        console.log(`⏰ Timeout en el fetch para ${email}`);
-                        // No resolver null, dejar que continúe
-                    }, 20000);
-                    
+                    // Descargar y procesar el correo más reciente
                     const fetch = this.imap.fetch(latestResult, { bodies: '' });
                     
                     fetch.on('message', (msg, seqno) => {
                         msg.on('body', async (stream, info) => {
                             try {
-                                clearTimeout(fetchTimeout);
                                 const parsed = await simpleParser(stream);
                                 
-                                // Buscar códigos en cuerpo y asunto usando detección multi-idioma
                                 const cuerpo = parsed.text || '';
                                 const asunto = parsed.subject || '';
                                 const codigos = this.extraerCodigosDisney(cuerpo, asunto);
@@ -635,11 +617,11 @@ class EmailReader {
                                     });
                                     return;
                                 } else {
-                                    console.log(`📧 Correo más reciente no tiene códigos válidos`);
+                                    console.log(`📧 Correo más reciente no tiene código válido`);
                                     resolve(null);
                                 }
+                                
                             } catch (error) {
-                                clearTimeout(fetchTimeout);
                                 console.log(`⚠️ Error procesando correo: ${error.message}`);
                                 resolve(null);
                             }
@@ -647,12 +629,106 @@ class EmailReader {
                     });
 
                     fetch.once('error', (err) => {
-                        clearTimeout(fetchTimeout);
                         console.log(`⚠️ Error fetching: ${err.message}`);
                         resolve(null);
                     });
                 });
             });
+        });
+    }
+
+    // Procesar correo más reciente de forma ultra-rápida
+    procesarCorreoMasReciente(results, email, resolve) {
+        const sortedResults = results.sort((a, b) => b - a);
+        const latestResult = sortedResults[0];
+        
+        console.log(`🔍 Verificando correo más reciente`);
+        
+        const fetch = this.imap.fetch(latestResult, { 
+            bodies: 'HEADER.FIELDS (SUBJECT)', 
+            struct: true 
+        });
+        
+        fetch.on('message', (msg, seqno) => {
+            msg.on('body', async (stream, info) => {
+                try {
+                    const parsed = await simpleParser(stream);
+                    
+                    // Verificar si es Disney+ por asunto primero
+                    const asunto = parsed.subject || '';
+                    if (!this.esAsuntoDisney(asunto)) {
+                        console.log(`📧 Correo no es de Disney+: ${asunto}`);
+                        resolve(null);
+                        return;
+                    }
+                    
+                    // Si es Disney+, descargar cuerpo completo
+                    this.descargarCuerpoCompleto(latestResult, email, resolve);
+                    
+                } catch (error) {
+                    console.log(`⚠️ Error procesando asunto: ${error.message}`);
+                    resolve(null);
+                }
+            });
+        });
+
+        fetch.once('error', (err) => {
+            console.log(`⚠️ Error fetch: ${err.message}`);
+            resolve(null);
+        });
+    }
+
+    // Verificar si asunto es de Disney+ (múltiples idiomas)
+    esAsuntoDisney(asunto) {
+        if (!asunto) return false;
+        
+        const disneyKeywords = [
+            'disney+', 'disney plus', 'código', 'codigo', 'verificación', 'verificacion',
+            'code', 'verification', 'verify', 'vérification', 'vérifiez',
+            'code', 'verifizierung', 'überprüfen', 'kod', 'verifiering'
+        ];
+        
+        return disneyKeywords.some(keyword => 
+            asunto.toLowerCase().includes(keyword.toLowerCase())
+        );
+    }
+
+    // Descargar cuerpo completo y extraer código
+    descargarCuerpoCompleto(uid, email, resolve) {
+        const fetch = this.imap.fetch(uid, { bodies: '' });
+        
+        fetch.on('message', (msg, seqno) => {
+            msg.on('body', async (stream, info) => {
+                try {
+                    const parsed = await simpleParser(stream);
+                    
+                    const cuerpo = parsed.text || '';
+                    const asunto = parsed.subject || '';
+                    const codigos = this.extraerCodigosDisney(cuerpo, asunto);
+                    
+                    if (codigos.length > 0) {
+                        console.log(`✅ Código encontrado para ${email}: ${codigos[0]}`);
+                        resolve({ 
+                            codigos: codigos, 
+                            servicio: 'disney+',
+                            to: email
+                        });
+                        return;
+                    } else {
+                        console.log(`📧 Correo Disney+ sin código válido`);
+                        resolve(null);
+                    }
+                    
+                } catch (error) {
+                    console.log(`⚠️ Error procesando cuerpo: ${error.message}`);
+                    resolve(null);
+                }
+            });
+        });
+
+        fetch.once('error', (err) => {
+            console.log(`⚠️ Error descargando cuerpo: ${err.message}`);
+            resolve(null);
         });
     }
 
