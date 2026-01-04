@@ -561,8 +561,8 @@ class EmailReader {
         console.log(`🔍 Buscando último correo para: ${email}`);
         
         return new Promise((resolve, reject) => {
-            // Búsqueda simple: últimos 20 minutos, cualquier correo para el email
-            const fechaLimite = new Date(Date.now() - 20 * 60 * 1000);
+            // Búsqueda simple: últimas 2 horas, cualquier correo para el email
+            const fechaLimite = new Date(Date.now() - 2 * 60 * 60 * 1000);
             const searchCriteria = [
                 ['SINCE', fechaLimite],
                 ['TO', email]
@@ -575,7 +575,7 @@ class EmailReader {
                     return;
                 }
 
-                console.log(`🔍 Buscando último correo (20 min) para: ${email}`);
+                console.log(`🔍 Buscando último correo (2 horas) para: ${email}`);
 
                 this.imap.search(searchCriteria, (err, results) => {
                     if (err) {
@@ -589,6 +589,8 @@ class EmailReader {
                         resolve(null);
                         return;
                     }
+
+                    console.log(`📧 Encontrados ${results.length} correos para ${email}`);
 
                     // Ordenar por UID descendente y tomar el MÁS RECIENTE
                     const sortedResults = results.sort((a, b) => b - a);

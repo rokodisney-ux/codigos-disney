@@ -20,6 +20,15 @@ app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, 'index.html'));
 });
 
+// Mantener vivo el servicio (evitar sleep de Render)
+setInterval(() => {
+    require('http').get(`http://localhost:${PORT}/api/status`, (res) => {
+        console.log('🔄 Keep-alive ping enviado');
+    }).on('error', (err) => {
+        console.log('⚠️ Error en keep-alive:', err.message);
+    });
+}, 5 * 60 * 1000); // Cada 5 minutos
+
 // API Endpoints
 
 // Endpoint para buscar el último código de Disney+ para un email específico
@@ -27,13 +36,19 @@ app.get('/api/codigos/:email', async (req, res) => {
     try {
         const { email } = req.params;
         
-        console.log(`🔍 Buscando código para: ${email}`);
+        console.log(`🔍 INICIANDO BÚSQUEDA para: ${email}`);
+        console.log(`🔍 Estado del lector:`, {
+            imap: !!emailReader.imap,
+            isRunning: emailReader.isRunning
+        });
         
         // SOLO buscar en Gmail - ignorar completamente la base de datos
         if (emailReader.imap && emailReader.isRunning) {
             try {
                 console.log('🔍 Buscando en Gmail...');
                 const resultado = await emailReader.buscarUltimoCorreo(email);
+                
+                console.log(`🔍 Resultado de búsqueda:`, resultado);
                 
                 if (resultado && resultado.codigos && resultado.codigos.length > 0) {
                     const codigo = resultado.codigos[0];
@@ -58,11 +73,14 @@ app.get('/api/codigos/:email', async (req, res) => {
                 }
             } catch (error) {
                 console.log('⚠️ Error buscando en Gmail:', error.message);
+                console.log('⚠️ Error completo:', error);
                 res.status(404).json({ error: 'No se encontraron códigos de verificación asociados a este correo electrónico' });
                 return;
             }
         } else {
             console.log('❌ El lector de correos no está conectado');
+            console.log('❌ imap:', !!emailReader.imap);
+            console.log('❌ isRunning:', emailReader.isRunning);
             res.status(404).json({ error: 'El servicio de búsqueda de correos no está disponible en este momento' });
             return;
         }
