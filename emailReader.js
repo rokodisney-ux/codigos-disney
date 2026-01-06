@@ -289,63 +289,103 @@ class EmailReader {
             }
 
             console.log(`🔍 Buscando en ${carpeta} (20 minutos) para: ${email}`);
+            console.log(`📊 Total mensajes en ${carpeta}: ${box.messages.total}`);
+            console.log(`📊 Mensajes no leídos en ${carpeta}: ${box.messages.unseen}`);
 
-            this.imap.search(searchCriteria, (err, results) => {
+            // Primero buscar SIN filtro de fecha para ver qué hay
+            const searchCriteriaSimple = [
+                ['TO', email]
+            ];
+
+            this.imap.search(searchCriteriaSimple, (err, results) => {
                 if (err) {
                     console.log(`⚠️ Error buscando en ${carpeta}: ${err.message}`);
                     callback();
                     return;
                 }
 
+                console.log(`📧 Encontrados ${results.length} correos TOTALES para ${email} en ${carpeta}`);
+                
                 if (!results || results.length === 0) {
                     console.log(`📭 No hay correos en ${carpeta} para: ${email}`);
                     callback();
                     return;
                 }
 
-                console.log(`📧 Encontrados ${results.length} correos en ${carpeta} para ${email}`);
+                // Ahora aplicar filtro de 20 minutos
+                const fechaLimite = new Date(Date.now() - 20 * 60 * 1000);
+                const searchCriteriaConFecha = [
+                    ['SINCE', fechaLimite],
+                    ['TO', email]
+                ];
 
-                // Ordenar por UID descendente y tomar el MÁS RECIENTE
-                const sortedResults = results.sort((a, b) => b - a);
-                const latestResult = sortedResults[0];
-                
-                console.log(`🔍 Procesando correo más reciente de ${carpeta}`);
-                
-                // Descargar y procesar el correo más reciente
-                const fetch = this.imap.fetch(latestResult, { bodies: '' });
-                
-                fetch.on('message', (msg, seqno) => {
-                    msg.on('body', async (stream, info) => {
-                        try {
-                            const parsed = await simpleParser(stream);
-                            
-                            const cuerpo = parsed.text || '';
-                            const asunto = parsed.subject || '';
-                            const codigos = this.extraerCodigosDisney(cuerpo, asunto);
-                            
-                            if (codigos.length > 0) {
-                                console.log(`✅ Código encontrado para ${email} en ${carpeta}: ${codigos[0]}`);
-                                resolve({ 
-                                    codigos: codigos, 
-                                    servicio: 'disney+',
-                                    to: email
-                                });
-                                return;
-                            } else {
-                                console.log(`📧 Correo más reciente en ${carpeta} no tiene código válido`);
+                this.imap.search(searchCriteriaConFecha, (err, resultsFiltrados) => {
+                    if (err) {
+                        console.log(`⚠️ Error buscando con fecha en ${carpeta}: ${err.message}`);
+                        callback();
+                        return;
+                    }
+
+                    console.log(`📧 Encontrados ${resultsFiltrados.length} correos (20 min) para ${email} en ${carpeta}`);
+
+                    if (!resultsFiltrados || resultsFiltrados.length === 0) {
+                        console.log(`📭 No hay correos recientes en ${carpeta} para: ${email}`);
+                        callback();
+                        return;
+                    }
+
+                    // Ordenar por UID descendente y tomar el MÁS RECIENTE
+                    const sortedResults = resultsFiltrados.sort((a, b) => b - a);
+                    const latestResult = sortedResults[0];
+                    
+                    console.log(`🔍 Procesando correo más reciente de ${carpeta} (UID: ${latestResult})`);
+                    
+                    // Descargar y procesar el correo más reciente
+                    const fetch = this.imap.fetch(latestResult, { bodies: '' });
+                    
+                    fetch.on('message', (msg, seqno) => {
+                        msg.on('body', async (stream, info) => {
+                            try {
+                                const parsed = await simpleParser(stream);
+                                
+                                const cuerpo = parsed.text || '';
+                                const asunto = parsed.subject || '';
+                                const de = parsed.from?.value?.[0]?.address || '';
+                                const fecha = parsed.date || new Date();
+                                
+                                console.log(`📧 Correo encontrado:`);
+                                console.log(`   - De: ${de}`);
+                                console.log(`   - Para: ${email}`);
+                                console.log(`   - Asunto: ${asunto}`);
+                                console.log(`   - Fecha: ${fecha}`);
+                                console.log(`   - Cuerpo (primeros 100 chars): ${cuerpo.substring(0, 100)}...`);
+                                
+                                const codigos = this.extraerCodigosDisney(cuerpo, asunto);
+                                
+                                if (codigos.length > 0) {
+                                    console.log(`✅ Código encontrado para ${email} en ${carpeta}: ${codigos[0]}`);
+                                    resolve({ 
+                                        codigos: codigos, 
+                                        servicio: 'disney+',
+                                        to: email
+                                    });
+                                    return;
+                                } else {
+                                    console.log(`📧 Correo más reciente en ${carpeta} no tiene código válido`);
+                                    callback();
+                                }
+                                
+                            } catch (error) {
+                                console.log(`⚠️ Error procesando correo en ${carpeta}: ${error.message}`);
                                 callback();
                             }
-                            
-                        } catch (error) {
-                            console.log(`⚠️ Error procesando correo en ${carpeta}: ${error.message}`);
-                            callback();
-                        }
+                        });
                     });
-                });
 
-                fetch.once('error', (err) => {
-                    console.log(`⚠️ Error fetching en ${carpeta}: ${err.message}`);
-                    callback();
+                    fetch.once('error', (err) => {
+                        console.log(`⚠️ Error fetching en ${carpeta}: ${err.message}`);
+                        callback();
+                    });
                 });
             });
         });
