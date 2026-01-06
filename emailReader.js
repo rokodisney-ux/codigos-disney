@@ -13,15 +13,12 @@ class EmailReader {
     getImapConfig() {
         return {
             user: process.env.GMAIL_USER,
-            password: process.env.GMAIL_PASS,
+            password: process.env.GMAIL_PASSWORD,
             host: process.env.IMAP_HOST || 'imap.gmail.com',
             port: parseInt(process.env.IMAP_PORT) || 993,
             tls: true,
-            tlsOptions: { 
-                rejectUnauthorized: false,
-                servername: 'imap.gmail.com'
-            },
-            connTimeout: 30000, // 30 segundos
+            tlsOptions: { rejectUnauthorized: false },
+            connTimeout: 60000, // 60 segundos
             authTimeout: 30000,  // 30 segundos
             keepalive: {
                 interval: 10000, // 10 segundos
@@ -31,54 +28,34 @@ class EmailReader {
         };
     }
 
-    // Detectar Disney+ en múltiples idiomas y extraer códigos
-    extraerCodigosDisney(texto, asunto) {
-        if (!texto && !asunto) return [];
+    // Extraer códigos de 6 dígitos (Disney+ SIEMPRE usa 6 dígitos)
+    extraerCodigos(texto) {
+        if (!texto) return [];
         
-        const textoCompleto = (texto + ' ' + asunto).toLowerCase();
-        
-        // Palabras clave de Disney+ en múltiples idiomas
-        const disneyKeywords = [
-            // Español
-            'disney+', 'disney plus', 'código', 'codigo', 'verificación', 'verificacion',
-            'ingresa', 'ingresar', 'accede', 'acceder', 'tu código', 'tu codigo',
-            // Inglés
-            'disney+', 'disney plus', 'code', 'verification', 'verify', 'enter',
-            'sign in', 'log in', 'your code', 'access', 'authenticate',
-            // Francés
-            'disney+', 'disney plus', 'code', 'vérification', 'vérifiez', 'votre code',
-            'accédez', 'connectez', 'authentifiez', 'entrez',
-            // Alemán
-            'disney+', 'disney plus', 'code', 'verifizierung', 'überprüfen', 'ihr code',
-            'zugang', 'anmelden', 'einloggen', 'authentifizieren',
-            // Sueco
-            'disney+', 'disney plus', 'kod', 'verifiering', 'verifiera', 'din kod',
-            'logga in', 'access', 'autentisera', 'ange'
-        ];
-        
-        // Verificar si es un correo de Disney+ en cualquier idioma
-        const esDisneyCorreo = disneyKeywords.some(keyword => 
-            textoCompleto.includes(keyword.toLowerCase())
-        );
-        
-        if (!esDisneyCorreo) {
-            return [];
-        }
-        
-        // Extraer todos los códigos de 6 dígitos
+        // Regex para códigos de 6 dígitos (Disney+ siempre usa 6 dígitos)
         const regex = /\b\d{6}\b/g;
-        const todosLosCodigos = (texto + ' ' + asunto).match(regex) || [];
+        const todosLosCodigos = texto.match(regex) || [];
         
-        // Filtrar códigos válidos (excluir patrones conocidos inválidos)
+        // Filtrar y excluir 000000 y códigos inválidos
         const codigosValidos = todosLosCodigos.filter(codigo => {
-            return codigo !== '000000' && 
-                   !codigo.startsWith('0000') && 
-                   !codigo.startsWith('1111') &&
-                   !codigo.startsWith('9999');
+            return codigo !== '000000' && !codigo.startsWith('0000');
         });
         
-        console.log(`🔍 Detección multi-idioma: ${esDisneyCorreo ? '✅ Disney+' : '❌ No Disney+'}`);
-        console.log(`🔍 Códigos encontrados: ${codigosValidos.length > 0 ? codigosValidos.join(', ') : 'Ninguno'}`);
+        return codigosValidos;
+    }
+
+    // Método de respaldo por si extraerCodigos no está disponible
+    extraerCodigosFallback(texto) {
+        if (!texto) return [];
+        
+        // Regex para códigos de 6 dígitos (Disney+ siempre usa 6 dígitos)
+        const regex = /\b\d{6}\b/g;
+        const todosLosCodigos = texto.match(regex) || [];
+        
+        // Filtrar y excluir 000000 y códigos inválidos
+        const codigosValidos = todosLosCodigos.filter(codigo => {
+            return codigo !== '000000' && !codigo.startsWith('0000');
+        });
         
         return codigosValidos;
     }
@@ -147,8 +124,14 @@ class EmailReader {
                 return null;
             }
 
-            // Extraer códigos de 6 dígitos
-            const codigos = this.extraerCodigos(cuerpo);
+            // Extraer códigos de 6 dígitos con fallback
+            let codigos;
+            try {
+                codigos = this.extraerCodigos ? this.extraerCodigos(cuerpo) : this.extraerCodigosFallback(cuerpo);
+            } catch (error) {
+                console.log('⚠️ Error usando extraerCodigos, usando fallback:', error.message);
+                codigos = this.extraerCodigosFallback(cuerpo);
+            }
 
             if (codigos.length > 0) {
                 // Detectar servicio (simplificado)
@@ -445,7 +428,7 @@ class EmailReader {
         for (const seccion of secciones) {
             try {
                 console.log(`🔍 Búsqueda rápida en: ${seccion}`);
-                const resultado = await this.buscarEnBandejaPorAsunto(seccion, searchCriteria, email);
+                const resultado = await this.buscarEnBandeja(seccion, searchCriteria, email);
                 if (resultado) {
                     console.log(`✅ Encontrado en ${seccion}`);
                     return resultado;
@@ -549,224 +532,6 @@ class EmailReader {
                     checkNextEmail();
                 });
             });
-        });
-    }
-
-    // Buscar el último correo para un email específico (versión simple - búsqueda global)
-    async buscarUltimoCorreo(email) {
-        if (!this.imap || !this.isRunning) {
-            throw new Error('El lector de correos no está conectado');
-        }
-
-        console.log(`🔍 Buscando último correo para: ${email}`);
-        
-        return new Promise((resolve, reject) => {
-            // Búsqueda simple: últimas 24 horas, cualquier correo para el email
-            const fechaLimite = new Date(Date.now() - 24 * 60 * 60 * 1000);
-            const searchCriteria = [
-                ['SINCE', fechaLimite],
-                ['TO', email]
-            ];
-
-            // Buscar en TODAS las carpetas disponibles
-            this.imap.getBoxes((err, boxes) => {
-                if (err) {
-                    console.log('❌ Error obteniendo carpetas:', err);
-                    resolve(null);
-                    return;
-                }
-
-                console.log(`📁 Carpetas disponibles:`, Object.keys(boxes));
-                
-                // Buscar recursivamente en todas las carpetas
-                this.buscarEnTodasLasCarpetas(boxes, searchCriteria, email, resolve);
-            });
-        });
-    }
-
-    // Buscar recursivamente en todas las carpetas
-    buscarEnTodasLasCarpetas(boxes, searchCriteria, email, resolve, index = 0) {
-        const carpetas = Object.keys(boxes);
-        
-        if (index >= carpetas.length) {
-            console.log(`📭 No hay correos recientes en ninguna carpeta para: ${email}`);
-            resolve(null);
-            return;
-        }
-
-        const carpeta = carpetas[index];
-        console.log(`🔍 Buscando en carpeta ${index + 1}/${carpetas.length}: ${carpeta}`);
-
-        this.buscarEnCarpeta(carpeta, searchCriteria, email, resolve, () => {
-            // Si no encuentra en esta carpeta, continuar con la siguiente
-            this.buscarEnTodasLasCarpetas(boxes, searchCriteria, email, resolve, index + 1);
-        });
-    }
-
-    // Buscar en una carpeta específica
-    buscarEnCarpeta(carpeta, searchCriteria, email, resolve, callback) {
-        this.imap.openBox(carpeta, false, (err, box) => {
-            if (err) {
-                console.log(`⚠️ No se pudo abrir ${carpeta}: ${err.message}`);
-                callback();
-                return;
-            }
-
-            console.log(`🔍 Buscando en ${carpeta} (24 horas) para: ${email}`);
-
-            this.imap.search(searchCriteria, (err, results) => {
-                if (err) {
-                    console.log(`⚠️ Error buscando en ${carpeta}: ${err.message}`);
-                    callback();
-                    return;
-                }
-
-                if (!results || results.length === 0) {
-                    console.log(`📭 No hay correos en ${carpeta} para: ${email}`);
-                    callback();
-                    return;
-                }
-
-                console.log(`📧 Encontrados ${results.length} correos en ${carpeta} para ${email}`);
-
-                // Ordenar por UID descendente y tomar el MÁS RECIENTE
-                const sortedResults = results.sort((a, b) => b - a);
-                const latestResult = sortedResults[0];
-                
-                console.log(`🔍 Procesando correo más reciente de ${carpeta}`);
-                
-                // Descargar y procesar el correo más reciente
-                const fetch = this.imap.fetch(latestResult, { bodies: '' });
-                
-                fetch.on('message', (msg, seqno) => {
-                    msg.on('body', async (stream, info) => {
-                        try {
-                            const parsed = await simpleParser(stream);
-                            
-                            const cuerpo = parsed.text || '';
-                            const asunto = parsed.subject || '';
-                            const codigos = this.extraerCodigosDisney(cuerpo, asunto);
-                            
-                            if (codigos.length > 0) {
-                                console.log(`✅ Código encontrado para ${email} en ${carpeta}: ${codigos[0]}`);
-                                resolve({ 
-                                    codigos: codigos, 
-                                    servicio: 'disney+',
-                                    to: email
-                                });
-                                return;
-                            } else {
-                                console.log(`📧 Correo más reciente en ${carpeta} no tiene código válido`);
-                                callback();
-                            }
-                            
-                        } catch (error) {
-                            console.log(`⚠️ Error procesando correo en ${carpeta}: ${error.message}`);
-                            callback();
-                        }
-                    });
-                });
-
-                fetch.once('error', (err) => {
-                    console.log(`⚠️ Error fetching en ${carpeta}: ${err.message}`);
-                    callback();
-                });
-            });
-        });
-    }
-
-    // Procesar correo más reciente de forma ultra-rápida
-    procesarCorreoMasReciente(results, email, resolve) {
-        const sortedResults = results.sort((a, b) => b - a);
-        const latestResult = sortedResults[0];
-        
-        console.log(`🔍 Verificando correo más reciente`);
-        
-        const fetch = this.imap.fetch(latestResult, { 
-            bodies: 'HEADER.FIELDS (SUBJECT)', 
-            struct: true 
-        });
-        
-        fetch.on('message', (msg, seqno) => {
-            msg.on('body', async (stream, info) => {
-                try {
-                    const parsed = await simpleParser(stream);
-                    
-                    // Verificar si es Disney+ por asunto primero
-                    const asunto = parsed.subject || '';
-                    if (!this.esAsuntoDisney(asunto)) {
-                        console.log(`📧 Correo no es de Disney+: ${asunto}`);
-                        resolve(null);
-                        return;
-                    }
-                    
-                    // Si es Disney+, descargar cuerpo completo
-                    this.descargarCuerpoCompleto(latestResult, email, resolve);
-                    
-                } catch (error) {
-                    console.log(`⚠️ Error procesando asunto: ${error.message}`);
-                    resolve(null);
-                }
-            });
-        });
-
-        fetch.once('error', (err) => {
-            console.log(`⚠️ Error fetch: ${err.message}`);
-            resolve(null);
-        });
-    }
-
-    // Verificar si asunto es de Disney+ (múltiples idiomas)
-    esAsuntoDisney(asunto) {
-        if (!asunto) return false;
-        
-        const disneyKeywords = [
-            'disney+', 'disney plus', 'código', 'codigo', 'verificación', 'verificacion',
-            'code', 'verification', 'verify', 'vérification', 'vérifiez',
-            'code', 'verifizierung', 'überprüfen', 'kod', 'verifiering'
-        ];
-        
-        return disneyKeywords.some(keyword => 
-            asunto.toLowerCase().includes(keyword.toLowerCase())
-        );
-    }
-
-    // Descargar cuerpo completo y extraer código
-    descargarCuerpoCompleto(uid, email, resolve) {
-        const fetch = this.imap.fetch(uid, { bodies: '' });
-        
-        fetch.on('message', (msg, seqno) => {
-            msg.on('body', async (stream, info) => {
-                try {
-                    const parsed = await simpleParser(stream);
-                    
-                    const cuerpo = parsed.text || '';
-                    const asunto = parsed.subject || '';
-                    const codigos = this.extraerCodigosDisney(cuerpo, asunto);
-                    
-                    if (codigos.length > 0) {
-                        console.log(`✅ Código encontrado para ${email}: ${codigos[0]}`);
-                        resolve({ 
-                            codigos: codigos, 
-                            servicio: 'disney+',
-                            to: email
-                        });
-                        return;
-                    } else {
-                        console.log(`📧 Correo Disney+ sin código válido`);
-                        resolve(null);
-                    }
-                    
-                } catch (error) {
-                    console.log(`⚠️ Error procesando cuerpo: ${error.message}`);
-                    resolve(null);
-                }
-            });
-        });
-
-        fetch.once('error', (err) => {
-            console.log(`⚠️ Error descargando cuerpo: ${err.message}`);
-            resolve(null);
         });
     }
 
