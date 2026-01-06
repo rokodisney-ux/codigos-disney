@@ -19,6 +19,32 @@ class EmailReader {
     // Inicializar autenticación con OAuth 2.0
     async iniciar() {
         try {
+            console.log('🔗 Iniciando lector de correos...');
+            
+            // Forzar uso de IMAP directamente (más confiable)
+            if (process.env.GMAIL_USER && process.env.GMAIL_PASS) {
+                console.log('🔄 Usando IMAP con app password (método preferido)...');
+                return await this.iniciarConAppPassword();
+            }
+            
+            // Si no hay credenciales IMAP, intentar OAuth
+            if (process.env.GMAIL_CLIENT_ID && process.env.GMAIL_CLIENT_SECRET) {
+                console.log('🔄 Intentando OAuth 2.0 como respaldo...');
+                return await this.iniciarConOAuth();
+            }
+            
+            throw new Error('No hay credenciales disponibles');
+            
+        } catch (error) {
+            console.error('❌ Error iniciando lector de correos:', error.message);
+            this.isRunning = false;
+            return false;
+        }
+    }
+
+    // Iniciar con OAuth 2.0
+    async iniciarConOAuth() {
+        try {
             console.log('🔗 Iniciando Gmail API con OAuth 2.0...');
             
             // Crear cliente OAuth 2.0
@@ -47,28 +73,13 @@ class EmailReader {
                 this.isRunning = true;
                 return true;
             } catch (profileError) {
-                console.log('⚠️ No se pudo obtener perfil, intentando método alternativo...');
-                
-                // Método alternativo: usar credenciales de usuario directamente
-                if (process.env.GMAIL_USER && process.env.GMAIL_PASS) {
-                    console.log('🔄 Usando método de app password como respaldo...');
-                    return await this.iniciarConAppPassword();
-                }
-                
+                console.log('⚠️ No se pudo obtener perfil, OAuth falló...');
                 throw profileError;
             }
 
         } catch (error) {
-            console.error('❌ Error iniciando Gmail API:', error.message);
-            
-            // Si OAuth falla, intentar con app password
-            if (process.env.GMAIL_USER && process.env.GMAIL_PASS) {
-                console.log('🔄 Intentando con app password como respaldo...');
-                return await this.iniciarConAppPassword();
-            }
-            
-            this.isRunning = false;
-            return false;
+            console.error('❌ Error iniciando OAuth 2.0:', error.message);
+            throw error;
         }
     }
 
@@ -182,14 +193,16 @@ class EmailReader {
         console.log(`🔍 Buscando último correo para: ${email}`);
         
         try {
-            // Si tenemos Gmail API disponible, usarla
-            if (this.gmail && this.oauth2Client) {
-                return await this.buscarConGmailAPI(email);
+            // Si tenemos IMAP disponible, usarlo (método preferido)
+            if (this.imap) {
+                console.log('🔍 Usando IMAP para búsqueda...');
+                return await this.buscarConIMAP(email);
             }
             
-            // Si no, usar IMAP
-            if (this.imap) {
-                return await this.buscarConIMAP(email);
+            // Si no, usar Gmail API
+            if (this.gmail && this.oauth2Client) {
+                console.log('🔍 Usando Gmail API para búsqueda...');
+                return await this.buscarConGmailAPI(email);
             }
             
             throw new Error('No hay método de búsqueda disponible');
