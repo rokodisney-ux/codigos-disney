@@ -11,6 +11,9 @@ const PORT = process.env.PORT || 3000;
 const db = new Database();
 const emailReader = new EmailReader();
 
+// Crear aplicación Express
+const app = express();
+
 // Middleware
 app.use(cors());
 app.use(express.json());
