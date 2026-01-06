@@ -206,7 +206,28 @@ class EmailReader {
 
     // Buscar recursivamente en todas las carpetas
     buscarEnTodasLasCarpetas(boxes, searchCriteria, email, resolve, index = 0) {
-        const carpetas = Object.keys(boxes);
+        // Lista priorizada de carpetas donde Gmail podría poner correos de Disney+
+        const carpetasPrioritarias = [
+            'INBOX',
+            '[Gmail]/Spam',
+            '[Gmail]/Promociones', 
+            '[Gmail]/Social',
+            '[Gmail]/Updates',
+            '[Gmail]/All Mail'
+        ];
+        
+        // Usar carpetas priorizadas si existen
+        const carpetas = carpetasPrioritarias.filter(carpeta => boxes[carpeta]);
+        
+        if (carpetas.length === 0) {
+            // Si no hay carpetas priorizarias, usar todas las disponibles
+            const todasLasCarpetas = Object.keys(boxes);
+            todasLasCarpetas.forEach(carpeta => {
+                if (carpeta !== '[Gmail]') {
+                    carpetas.push(carpeta);
+                }
+            });
+        }
         
         if (index >= carpetas.length) {
             console.log(`📭 No hay correos recientes (20 min) en ninguna carpeta para: ${email}`);
@@ -215,13 +236,6 @@ class EmailReader {
         }
 
         const carpeta = carpetas[index];
-        
-        // Omitir [Gmail] porque es una carpeta contenedora
-        if (carpeta === '[Gmail]') {
-            console.log(`⏭️ Omitiendo carpeta contenedora: ${carpeta}`);
-            this.buscarEnTodasLasCarpetas(boxes, searchCriteria, email, resolve, index + 1);
-            return;
-        }
         
         console.log(`🔍 Buscando en carpeta ${index + 1}/${carpetas.length}: ${carpeta}`);
 
