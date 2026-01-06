@@ -4,119 +4,82 @@ const Database = require('./database');
 
 class EmailReader {
     constructor() {
-        this.db = new Database();
         this.imap = null;
         this.isRunning = false;
+        this.db = new Database();
     }
 
-    // Configuración de conexión IMAP para Gmail con reintentos
+    // Configuración IMAP optimizada
     getImapConfig() {
         return {
             user: process.env.GMAIL_USER,
-            password: process.env.GMAIL_PASSWORD,
+            password: process.env.GMAIL_PASS,
             host: process.env.IMAP_HOST || 'imap.gmail.com',
             port: parseInt(process.env.IMAP_PORT) || 993,
             tls: true,
-            tlsOptions: { rejectUnauthorized: false },
-            connTimeout: 60000, // 60 segundos
-            authTimeout: 30000,  // 30 segundos
+            tlsOptions: { 
+                rejectUnauthorized: false,
+                servername: 'imap.gmail.com'
+            },
+            connTimeout: 30000,
+            authTimeout: 30000,
             keepalive: {
-                interval: 10000, // 10 segundos
-                idleTimeout: 300000, // 5 minutos
+                interval: 10000,
+                idleTimeout: 300000,
                 forceNoop: true
             }
         };
     }
 
-    // Extraer códigos de 6 dígitos (Disney+ SIEMPRE usa 6 dígitos)
-    extraerCodigos(texto) {
-        if (!texto) return [];
+    // Extraer códigos de Disney+ (multi-idioma)
+    extraerCodigosDisney(cuerpo, asunto) {
+        if (!cuerpo && !asunto) return [];
         
-        // Regex para códigos de 6 dígitos (Disney+ siempre usa 6 dígitos)
-        const regex = /\b\d{6}\b/g;
-        const todosLosCodigos = texto.match(regex) || [];
+        const textoCompleto = `${cuerpo || ''} ${asunto || ''}`.toLowerCase();
         
-        // Filtrar y excluir 000000 y códigos inválidos
-        const codigosValidos = todosLosCodigos.filter(codigo => {
-            return codigo !== '000000' && !codigo.startsWith('0000');
-        });
-        
-        return codigosValidos;
-    }
-
-    // Método de respaldo por si extraerCodigos no está disponible
-    extraerCodigosFallback(texto) {
-        if (!texto) return [];
-        
-        // Regex para códigos de 6 dígitos (Disney+ siempre usa 6 dígitos)
-        const regex = /\b\d{6}\b/g;
-        const todosLosCodigos = texto.match(regex) || [];
-        
-        // Filtrar y excluir 000000 y códigos inválidos
-        const codigosValidos = todosLosCodigos.filter(codigo => {
-            return codigo !== '000000' && !codigo.startsWith('0000');
-        });
-        
-        return codigosValidos;
-    }
-
-    // Detectar el servicio basado en el contenido del correo (múltiples idiomas principales)
-    detectarServicio(asunto, cuerpo, from) {
-        const texto = (asunto + ' ' + cuerpo + ' ' + from).toLowerCase();
-        
-        // Palabras clave de Disney+ en idiomas principales
+        // Palabras clave en múltiples idiomas
         const disneyKeywords = [
-            // Español
-            'disney', 'disney+', 'disneyplus', 'disney plus',
-            'código de acceso', 'código único', 'codigo de acceso', 'codigo unico',
-            'tu código de acceso único', 'tu codigo de acceso unico',
-            'verificar', 'verificación', 'mydisney', 'my disney',
-            
-            // Inglés
-            'disney', 'disney+', 'disneyplus', 'disney plus',
-            'access code', 'unique code', 'verification code', 'verify code',
-            'your unique access code', 'your access code', 'verification',
-            'mydisney', 'my disney',
-            
-            // SUECO
-            'disney', 'disney+', 'disneyplus', 'disney plus',
-            'engångskod', 'din engångskod', 'verifiera', 'mydisney',
-            
-            // Alemán
-            'disney', 'disney+', 'disneyplus', 'disney plus',
-            'zugangscode', 'einzigartiger code', 'verifizierungscode',
-            'ihr einzigartiger zugangscode', 'überprüfen', 'mydisney',
-            
-            // Francés
-            'disney', 'disney+', 'disneyplus', 'disney plus',
-            'code d\'accès', 'code unique', 'code de vérification',
-            'votre code d\'accès unique', 'vérifier', 'mydisney',
-            
-            // Holandés
-            'disney', 'disney+', 'disneyplus', 'disney plus',
-            'toegangscode', 'unieke code', 'verificatiecode',
-            'uw unieke toegangscode', 'verifiëren', 'mydisney'
+            'disney+', 'disney plus', 'código', 'codigo', 'verificación', 'verificacion',
+            'code', 'verification', 'verify', 'vérification', 'vérifiez',
+            'code', 'verifizierung', 'überprüfen', 'kod', 'verifiering',
+            'access code', 'unique access code', 'engångskod', 'zugangscode',
+            "code d'accès", 'toegangscode', 'código de acesso', 'codigo de acesso'
         ];
         
-        // Detectar si es Disney+ en cualquier idioma principal
-        if (disneyKeywords.some(keyword => texto.includes(keyword)) || 
-            texto.includes('@disney') && texto.includes('.com')) {
-            return 'disney+';
-        }
+        // Verificar si es un correo de Disney+
+        const esDisney = disneyKeywords.some(keyword => textoCompleto.includes(keyword));
         
-        return 'desconocido';
+        if (!esDisney) return [];
+        
+        // Buscar códigos de 6 dígitos
+        const regex = /\b\d{6}\b/g;
+        const codigos = textoCompleto.match(regex) || [];
+        
+        // Filtrar códigos válidos
+        return codigos.filter(codigo => 
+            codigo !== '000000' && 
+            !codigo.startsWith('0000') &&
+            !codigo.startsWith('1111') &&
+            !codigo.startsWith('2222') &&
+            !codigo.startsWith('3333') &&
+            !codigo.startsWith('4444') &&
+            !codigo.startsWith('5555') &&
+            !codigo.startsWith('6666') &&
+            !codigo.startsWith('7777') &&
+            !codigo.startsWith('8888') &&
+            !codigo.startsWith('9999')
+        );
     }
 
-    // Procesar un correo electrónico (simplificado)
-    async procesarEmail(msg) {
+    // Procesar email y extraer información
+    async procesarEmail(parsed) {
         try {
-            const asunto = msg.subject || '';
-            const cuerpo = msg.text || msg.html || '';
-            const to = msg.to?.value?.[0]?.address || '';
-            const from = msg.from?.value?.[0]?.address || '';
-            const fecha = msg.date || new Date();
-
-            // Extraer el dominio del destinatario
+            const from = parsed.from?.value?.[0]?.address || '';
+            const to = parsed.to?.value?.[0]?.address || '';
+            const subject = parsed.subject || '';
+            const body = parsed.text || '';
+            const fecha = parsed.date || new Date();
+            
             const dominio = to.split('@')[1] || '';
             
             // Solo procesar si es para los dominios permitidos
@@ -124,18 +87,11 @@ class EmailReader {
                 return null;
             }
 
-            // Extraer códigos de 6 dígitos con fallback
-            let codigos;
-            try {
-                codigos = this.extraerCodigos ? this.extraerCodigos(cuerpo) : this.extraerCodigosFallback(cuerpo);
-            } catch (error) {
-                console.log('⚠️ Error usando extraerCodigos, usando fallback:', error.message);
-                codigos = this.extraerCodigosFallback(cuerpo);
-            }
-
+            // Extraer códigos de Disney+
+            const codigos = this.extraerCodigosDisney(body, subject);
+            
             if (codigos.length > 0) {
-                // Detectar servicio (simplificado)
-                const servicio = this.detectarServicio(asunto, cuerpo, from);
+                const servicio = 'disney+';
                 
                 console.log(`📧 Correo para: ${to}`);
                 console.log(`📧 De: ${from}`);
@@ -144,21 +100,11 @@ class EmailReader {
                 console.log(`📅 Fecha: ${fecha}`);
                 console.log('---');
 
-                // Guardar cada código encontrado
-                for (const codigo of codigos) {
-                    await this.db.guardarCodigo(
-                        to,  // Usar el destinatario como email
-                        codigo,  // El código es solo el string
-                        servicio,  // El servicio detectado
-                        asunto,  // El asunto del correo
-                        asunto,  // El mensaje
-                        fecha.toISOString(),  // La fecha del correo
-                        dominio,  // El dominio
-                        'nuevo'  // Estado inicial
-                    );
-                }
-
-                return { codigos, servicio, to };
+                return { 
+                    codigos: codigos, 
+                    servicio: servicio, 
+                    to: to 
+                };
             }
         } catch (error) {
             console.error('Error procesando email:', error);
@@ -167,7 +113,7 @@ class EmailReader {
         return null;
     }
 
-    // Iniciar la conexión y monitoreo (modo seguro)
+    // Iniciar la conexión
     async iniciar() {
         if (this.isRunning) {
             console.log('⚠️  El lector de correos ya está en ejecución');
@@ -188,13 +134,11 @@ class EmailReader {
             this.imap.once('error', (err) => {
                 console.error('❌ Error de conexión IMAP:', err.message);
                 this.isRunning = false;
-                // No reiniciar automáticamente para no afectar al servidor
             });
 
             this.imap.once('end', () => {
                 console.log('📪 Conexión con Gmail finalizada');
                 this.isRunning = false;
-                // No reiniciar automáticamente para no afectar al servidor
             });
 
             this.imap.connect();
@@ -202,7 +146,6 @@ class EmailReader {
         } catch (error) {
             console.error('❌ Error al iniciar el lector de correos:', error.message);
             this.isRunning = false;
-            // No lanzar el error para no afectar al servidor
         }
     }
 
@@ -224,340 +167,144 @@ class EmailReader {
                 console.log(`📨 ${numNewMsgs} nuevo(s) correo(s) recibido(s) - PROCESANDO EN VIVO`);
                 setTimeout(() => {
                     this.buscarCorreosNoLeidos();
-                }, 2000); // Esperar 2 segundos para que el correo esté completamente disponible
+                }, 2000);
             });
         });
     }
 
-    // Buscar el último correo para un email específico (conexión bajo demanda)
-    async buscarUltimoCorreoDirecto(email) {
-        // Buscar correos de las últimas 2 horas
-        const fechaLimite = new Date(Date.now() - 2 * 60 * 60 * 1000);
-        const searchCriteria = [
-            ['SINCE', fechaLimite],
-            ['OR', 
-                ['SUBJECT', 'código de acceso único para Disney+'],
-                ['SUBJECT', 'codigo de acceso unico para Disney+'],
-                ['SUBJECT', 'access code for Disney+'],
-                ['SUBJECT', 'unique access code for Disney+'],
-                ['SUBJECT', 'engångskod för Disney+'],
-                ['SUBJECT', 'zugangscode für Disney+'],
-                ['SUBJECT', "code d'accès unique pour Disney+"],
-                ['SUBJECT', 'toegangscode voor Disney+'],
-                ['SUBJECT', 'Disney+'],
-                ['SUBJECT', 'Disney'],
-                ['SUBJECT', 'disney+'],
-                ['SUBJECT', 'disney']
-            ]
-        ];
+    // Buscar el último correo para un email específico (búsqueda completa)
+    async buscarUltimoCorreo(email) {
+        if (!this.imap || !this.isRunning) {
+            throw new Error('El lector de correos no está conectado');
+        }
 
+        console.log(`🔍 Buscando último correo para: ${email}`);
+        
         return new Promise((resolve, reject) => {
-            // Crear conexión IMAP temporal
-            const imap = new (require('imap'))(this.getImapConfig());
-            
-            imap.once('ready', () => {
-                console.log('✅ Conectado a Gmail para búsqueda directa');
+            // Búsqueda: últimas 24 horas, cualquier correo para el email
+            const fechaLimite = new Date(Date.now() - 24 * 60 * 60 * 1000);
+            const searchCriteria = [
+                ['SINCE', fechaLimite],
+                ['TO', email]
+            ];
+
+            // Buscar en TODAS las carpetas disponibles
+            this.imap.getBoxes((err, boxes) => {
+                if (err) {
+                    console.log('❌ Error obteniendo carpetas:', err);
+                    resolve(null);
+                    return;
+                }
+
+                console.log(`📁 Carpetas disponibles:`, Object.keys(boxes));
                 
-                // Buscar en INBOX primero
-                this.buscarEnBandejaPorAsuntoDirecto(imap, 'INBOX', searchCriteria, email)
-                    .then(resultado => {
-                        if (resultado) {
-                            console.log(`✅ Encontrado en INBOX para: ${email}`);
-                            imap.end();
-                            resolve(resultado);
-                        } else {
-                            // Si no hay en INBOX, buscar en Promociones
-                            this.buscarEnBandejaPorAsuntoDirecto(imap, '[Gmail]/Promociones', searchCriteria, email)
-                                .then(resultado => {
-                                    if (resultado) {
-                                        console.log(`✅ Encontrado en Promociones para: ${email}`);
-                                        imap.end();
-                                        resolve(resultado);
-                                    } else {
-                                        // Si no hay en Promociones, buscar en Social
-                                        this.buscarEnBandejaPorAsuntoDirecto(imap, '[Gmail]/Social', searchCriteria, email)
-                                            .then(resultado => {
-                                                if (resultado) {
-                                                    console.log(`✅ Encontrado en Social para: ${email}`);
-                                                    imap.end();
-                                                    resolve(resultado);
-                                                } else {
-                                                    // Si no hay en Social, buscar en Notificaciones
-                                                    this.buscarEnBandejaPorAsuntoDirecto(imap, '[Gmail]/Notificaciones', searchCriteria, email)
-                                                        .then(resultado => {
-                                                            if (resultado) {
-                                                                console.log(`✅ Encontrado en Notificaciones para: ${email}`);
-                                                                imap.end();
-                                                                resolve(resultado);
-                                                            } else {
-                                                                console.log(`❌ No se encontró código para: ${email}`);
-                                                                imap.end();
-                                                                resolve(null);
-                                                            }
-                                                        })
-                                                        .catch(error => {
-                                                            imap.end();
-                                                            resolve(null);
-                                                        });
-                                                }
-                                            })
-                                            .catch(error => {
-                                                imap.end();
-                                                resolve(null);
-                                            });
-                                    }
-                                })
-                                .catch(error => {
-                                    imap.end();
-                                    resolve(null);
+                // Buscar recursivamente en todas las carpetas
+                this.buscarEnTodasLasCarpetas(boxes, searchCriteria, email, resolve);
+            });
+        });
+    }
+
+    // Buscar recursivamente en todas las carpetas
+    buscarEnTodasLasCarpetas(boxes, searchCriteria, email, resolve, index = 0) {
+        const carpetas = Object.keys(boxes);
+        
+        if (index >= carpetas.length) {
+            console.log(`📭 No hay correos recientes en ninguna carpeta para: ${email}`);
+            resolve(null);
+            return;
+        }
+
+        const carpeta = carpetas[index];
+        
+        // Omitir [Gmail] porque es una carpeta contenedora
+        if (carpeta === '[Gmail]') {
+            console.log(`⏭️ Omitiendo carpeta contenedora: ${carpeta}`);
+            this.buscarEnTodasLasCarpetas(boxes, searchCriteria, email, resolve, index + 1);
+            return;
+        }
+        
+        console.log(`🔍 Buscando en carpeta ${index + 1}/${carpetas.length}: ${carpeta}`);
+
+        this.buscarEnCarpeta(carpeta, searchCriteria, email, resolve, () => {
+            // Si no encuentra en esta carpeta, continuar con la siguiente
+            this.buscarEnTodasLasCarpetas(boxes, searchCriteria, email, resolve, index + 1);
+        });
+    }
+
+    // Buscar en una carpeta específica
+    buscarEnCarpeta(carpeta, searchCriteria, email, resolve, callback) {
+        this.imap.openBox(carpeta, false, (err, box) => {
+            if (err) {
+                console.log(`⚠️ No se pudo abrir ${carpeta}: ${err.message}`);
+                callback();
+                return;
+            }
+
+            console.log(`🔍 Buscando en ${carpeta} (24 horas) para: ${email}`);
+
+            this.imap.search(searchCriteria, (err, results) => {
+                if (err) {
+                    console.log(`⚠️ Error buscando en ${carpeta}: ${err.message}`);
+                    callback();
+                    return;
+                }
+
+                if (!results || results.length === 0) {
+                    console.log(`📭 No hay correos en ${carpeta} para: ${email}`);
+                    callback();
+                    return;
+                }
+
+                console.log(`📧 Encontrados ${results.length} correos en ${carpeta} para ${email}`);
+
+                // Ordenar por UID descendente y tomar el MÁS RECIENTE
+                const sortedResults = results.sort((a, b) => b - a);
+                const latestResult = sortedResults[0];
+                
+                console.log(`🔍 Procesando correo más reciente de ${carpeta}`);
+                
+                // Descargar y procesar el correo más reciente
+                const fetch = this.imap.fetch(latestResult, { bodies: '' });
+                
+                fetch.on('message', (msg, seqno) => {
+                    msg.on('body', async (stream, info) => {
+                        try {
+                            const parsed = await simpleParser(stream);
+                            
+                            const cuerpo = parsed.text || '';
+                            const asunto = parsed.subject || '';
+                            const codigos = this.extraerCodigosDisney(cuerpo, asunto);
+                            
+                            if (codigos.length > 0) {
+                                console.log(`✅ Código encontrado para ${email} en ${carpeta}: ${codigos[0]}`);
+                                resolve({ 
+                                    codigos: codigos, 
+                                    servicio: 'disney+',
+                                    to: email
                                 });
+                                return;
+                            } else {
+                                console.log(`📧 Correo más reciente en ${carpeta} no tiene código válido`);
+                                callback();
+                            }
+                            
+                        } catch (error) {
+                            console.log(`⚠️ Error procesando correo en ${carpeta}: ${error.message}`);
+                            callback();
                         }
-                    })
-                    .catch(error => {
-                        imap.end();
-                        resolve(null);
                     });
-            });
+                });
 
-            imap.once('error', (err) => {
-                console.error('❌ Error de conexión IMAP:', err.message);
-                reject(err);
-            });
-
-            imap.connect();
-        });
-    }
-
-    // Buscar en una bandeja específica por asunto (conexión directa)
-    async buscarEnBandejaPorAsuntoDirecto(imap, bandeja, searchCriteria, email) {
-        return new Promise((resolve, reject) => {
-            // Timeout de 5 segundos
-            const timeout = setTimeout(() => {
-                console.log(`⏰ Timeout en ${bandeja}`);
-                resolve(null);
-            }, 5000);
-
-            imap.openBox(bandeja, false, (err, box) => {
-                if (err) {
-                    clearTimeout(timeout);
-                    console.log(`⚠️ No se pudo abrir ${bandeja}: ${err.message}`);
-                    resolve(null);
-                    return;
-                }
-
-                console.log(`🔍 Buscando en ${bandeja} por asunto Disney+`);
-
-                imap.search(searchCriteria, (err, results) => {
-                    clearTimeout(timeout);
-                    
-                    if (err) {
-                        console.log(`⚠️ Error buscando en ${bandeja}: ${err.message}`);
-                        resolve(null);
-                        return;
-                    }
-
-                    if (results.length === 0) {
-                        console.log(`📧 No hay correos con asunto Disney+ en ${bandeja}`);
-                        resolve(null);
-                        return;
-                    }
-
-                    console.log(`📧 Encontrados ${results.length} correos con asunto Disney+ en ${bandeja}`);
-
-                    // Ordenar por UID descendente para obtener el MÁS RECIENTE
-                    const sortedResults = results.sort((a, b) => b - a);
-                    
-                    // Buscar el primer correo que sea para el email correcto
-                    let found = false;
-                    let index = 0;
-                    
-                    const checkNextEmail = () => {
-                        if (index >= sortedResults.length) {
-                            console.log(`📧 Ningún correo es para ${email} en ${bandeja}`);
-                            resolve(null);
-                            return;
-                        }
-                        
-                        const currentResult = sortedResults[index];
-                        console.log(`🔍 Verificando correo ${index + 1}/${sortedResults.length} en ${bandeja}`);
-                        
-                        const fetch = imap.fetch(currentResult, { bodies: '' });
-                        
-                        fetch.on('message', (msg, seqno) => {
-                            msg.on('body', async (stream, info) => {
-                                try {
-                                    const parsed = await (require('mailparser')).simpleParser(stream);
-                                    const to = parsed.to?.value?.[0]?.address || '';
-                                    
-                                    // Verificar si este correo es para el email correcto
-                                    if (to === email) {
-                                        console.log(`✅ Correo encontrado para ${email} en ${bandeja}`);
-                                        const resultado = await this.procesarEmail(parsed);
-                                        found = true;
-                                        resolve(resultado);
-                                    } else {
-                                        console.log(`📧 Correo es para ${to}, no para ${email}`);
-                                        index++;
-                                        checkNextEmail();
-                                    }
-                                } catch (error) {
-                                    console.log(`⚠️ Error procesando correo en ${bandeja}: ${error.message}`);
-                                    index++;
-                                    checkNextEmail();
-                                }
-                            });
-                        });
-
-                        fetch.once('error', (err) => {
-                            console.log(`⚠️ Error fetching en ${bandeja}: ${err.message}`);
-                            index++;
-                            checkNextEmail();
-                        });
-                    };
-                    
-                    checkNextEmail();
+                fetch.once('error', (err) => {
+                    console.log(`⚠️ Error fetching en ${carpeta}: ${err.message}`);
+                    callback();
                 });
             });
         });
     }
 
-    // Búsqueda rápida en secciones principales
-    async buscarRapidoEnSecciones(email, searchCriteria) {
-        const secciones = ['[Gmail]/Promociones', '[Gmail]/Social']; // Solo las más importantes
-        
-        for (const seccion of secciones) {
-            try {
-                console.log(`🔍 Búsqueda rápida en: ${seccion}`);
-                const resultado = await this.buscarEnBandeja(seccion, searchCriteria, email);
-                if (resultado) {
-                    console.log(`✅ Encontrado en ${seccion}`);
-                    return resultado;
-                }
-            } catch (error) {
-                console.log(`⚠️ Omitiendo ${seccion}`);
-            }
-        }
-        
-        console.log(`❌ No se encontró en las secciones principales para: ${email}`);
-        return null;
-    }
-
-    // Buscar en una bandeja específica por asunto (rápido y filtrado)
-    async buscarEnBandejaPorAsunto(bandeja, searchCriteria, email) {
-        return new Promise((resolve, reject) => {
-            // Timeout de 5 segundos para ser rápido
-            const timeout = setTimeout(() => {
-                console.log(`⏰ Timeout en ${bandeja}`);
-                resolve(null);
-            }, 5000);
-
-            this.imap.openBox(bandeja, false, (err, box) => {
-                if (err) {
-                    clearTimeout(timeout);
-                    console.log(`⚠️ No se pudo abrir ${bandeja}: ${err.message}`);
-                    resolve(null);
-                    return;
-                }
-
-                console.log(`🔍 Buscando en ${bandeja} por asunto Disney+`);
-
-                this.imap.search(searchCriteria, (err, results) => {
-                    clearTimeout(timeout);
-                    
-                    if (err) {
-                        console.log(`⚠️ Error buscando en ${bandeja}: ${err.message}`);
-                        resolve(null);
-                        return;
-                    }
-
-                    if (results.length === 0) {
-                        console.log(`📧 No hay correos con asunto Disney+ en ${bandeja}`);
-                        resolve(null);
-                        return;
-                    }
-
-                    console.log(`📧 Encontrados ${results.length} correos con asunto Disney+ en ${bandeja}`);
-
-                    // Ordenar por UID descendente para obtener el MÁS RECIENTE
-                    const sortedResults = results.sort((a, b) => b - a);
-                    
-                    // Buscar el primer correo que sea para el email correcto
-                    let found = false;
-                    let index = 0;
-                    
-                    const checkNextEmail = () => {
-                        if (index >= sortedResults.length) {
-                            console.log(`📧 Ningún correo es para ${email} en ${bandeja}`);
-                            resolve(null);
-                            return;
-                        }
-                        
-                        const currentResult = sortedResults[index];
-                        console.log(`🔍 Verificando correo ${index + 1}/${sortedResults.length} en ${bandeja}`);
-                        
-                        const fetch = this.imap.fetch(currentResult, { bodies: '' });
-                        
-                        fetch.on('message', (msg, seqno) => {
-                            msg.on('body', async (stream, info) => {
-                                try {
-                                    const parsed = await simpleParser(stream);
-                                    const to = parsed.to?.value?.[0]?.address || '';
-                                    
-                                    // Verificar si este correo es para el email correcto
-                                    if (to === email) {
-                                        console.log(`✅ Correo encontrado para ${email} en ${bandeja}`);
-                                        const resultado = await this.procesarEmail(parsed);
-                                        found = true;
-                                        resolve(resultado);
-                                    } else {
-                                        console.log(`📧 Correo es para ${to}, no para ${email}`);
-                                        index++;
-                                        checkNextEmail();
-                                    }
-                                } catch (error) {
-                                    console.log(`⚠️ Error procesando correo en ${bandeja}: ${error.message}`);
-                                    index++;
-                                    checkNextEmail();
-                                }
-                            });
-                        });
-
-                        fetch.once('error', (err) => {
-                            console.log(`⚠️ Error fetching en ${bandeja}: ${err.message}`);
-                            index++;
-                            checkNextEmail();
-                        });
-                    };
-                    
-                    checkNextEmail();
-                });
-            });
-        });
-    }
-
-    // Buscar en otras secciones de Gmail
-    async buscarEnOtrasSecciones(email, searchCriteria) {
-        const secciones = ['[Gmail]/Promociones', '[Gmail]/Social', '[Gmail]/Notificaciones', '[Gmail]/Spam'];
-        
-        for (const seccion of secciones) {
-            try {
-                console.log(`🔍 Buscando en sección: ${seccion}`);
-                const resultado = await this.buscarEnBandeja(seccion, searchCriteria, email);
-                if (resultado) {
-                    console.log(`✅ Encontrado en ${seccion}`);
-                    return resultado;
-                }
-            } catch (error) {
-                console.log(`⚠️ Error en ${seccion}: ${error.message}`);
-            }
-        }
-        
-        return null;
-    }
-
-    // Buscar correos no leídos (solo últimos 2 días)
+    // Buscar correos no leídos
     buscarCorreosNoLeidos() {
-        // Solo buscar correos de los últimos 2 días
         const fechaLimite = new Date(Date.now() - 2 * 24 * 60 * 60 * 1000);
         const searchCriteria = ['UNSEEN', ['SINCE', fechaLimite], ['OR', 
             ['TO', '@rokotv.xyz'], 
@@ -601,47 +348,6 @@ class EmailReader {
             });
         });
     }
-
-    // Procesar correos existentes (eliminado - ahora solo procesa en tiempo real)
-    // async procesarCorreosExistentes() {
-    //     console.log('🔄 Procesando correos existentes...');
-    //     
-    //     // Buscar correos de los últimos 7 días enviados A los dominios específicos
-    //     const fechaLimite = new Date();
-    //     fechaLimite.setDate(fechaLimite.getDate() - 7);
-        
-    //     const searchCriteria = ['SINCE', fechaLimite, ['OR', 
-    //         ['TO', '@rokotv.xyz'], 
-    //         ['TO', '@rokostream.com']
-    //     ]];
-
-    //     this.imap.search(searchCriteria, (err, results) => {
-    //         if (err) {
-    //             console.error('❌ Error en búsqueda de correos existentes:', err);
-    //             return;
-    //         }
-
-    //         if (results.length === 0) {
-    //             console.log('📭 No hay correos existentes para los dominios especificados');
-    //             return;
-    //         }
-
-    //         console.log(`📧 Procesando ${results.length} correos existentes`);
-
-    //         const fetch = this.imap.fetch(results, { bodies: '' });
-            
-    //         fetch.on('message', (msg, seqno) => {
-    //             msg.on('body', async (stream, info) => {
-    //                 try {
-    //                     const parsed = await simpleParser(stream);
-    //                     await this.procesarEmail(parsed);
-    //                 } catch (error) {
-    //                     console.error('Error procesando mensaje existente:', error);
-    //                 }
-    //             });
-    //         });
-    //     });
-    // }
 
     // Detener el lector de correos
     detener() {
