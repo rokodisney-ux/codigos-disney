@@ -4,8 +4,8 @@ const cors = require('cors');
 const path = require('path');
 require('dotenv').config();
 
-// Usar Gmail API en lugar de IMAP
-const EmailReader = require('./emailReader-gmail-api');
+// Usar OAuth 2.0 con respaldo IMAP
+const EmailReader = require('./emailReader-oauth');
 const Database = require('./database');
 const PORT = process.env.PORT || 3000;
 const db = new Database();
@@ -42,12 +42,11 @@ app.get('/api/codigos/:email', async (req, res) => {
         
         console.log(`🔍 INICIANDO BÚSQUEDA para: ${email}`);
         console.log(`🔍 Estado del lector:`, {
-            gmail: !!emailReader.gmail,
             isRunning: emailReader.isRunning
         });
         
-        // SOLO buscar en Gmail con API - ignorar completamente la base de datos
-        if (emailReader.gmail && emailReader.isRunning) {
+        // Buscar con OAuth 2.0 o IMAP como respaldo
+        if (emailReader.isRunning) {
             try {
                 console.log('🔍 Buscando en Gmail...');
                 const resultado = await emailReader.buscarUltimoCorreo(email);
@@ -83,7 +82,6 @@ app.get('/api/codigos/:email', async (req, res) => {
             }
         } else {
             console.log('❌ El lector de correos no está conectado');
-            console.log('❌ gmail:', !!emailReader.gmail);
             console.log('❌ isRunning:', emailReader.isRunning);
             res.status(404).json({ error: 'El servicio de búsqueda de correos no está disponible en este momento' });
             return;
@@ -142,7 +140,7 @@ app.get('/api/status', (req, res) => {
     res.json({
         status: 'online',
         emailReader: emailReader.isRunning,
-        readerType: 'Gmail API',
+        readerType: 'OAuth 2.0 + IMAP',
         timestamp: new Date().toISOString()
     });
 });
@@ -189,11 +187,11 @@ app.listen(PORT, () => {
     console.log(`🚀 Servidor iniciado en http://localhost:${PORT}`);
     console.log(`📊 API disponible en http://localhost:${PORT}/api`);
     console.log(`🌐 Frontend disponible en http://localhost:${PORT}`);
-    console.log(`🔧 Usando Gmail API (multi-idioma)`);
+    console.log(`🔧 Usando OAuth 2.0 con respaldo IMAP (multi-idioma)`);
     
     // Iniciar el lector de correos inmediatamente
     setTimeout(() => {
-        console.log('📧 Iniciando lector de correos con Gmail API...');
+        console.log('📧 Iniciando lector de correos con OAuth 2.0...');
         emailReader.iniciar();
     }, 1000);
 });
