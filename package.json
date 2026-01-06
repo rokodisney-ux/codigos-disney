@@ -13,6 +13,7 @@
     "cors": "^2.8.5",
     "dotenv": "^16.6.1",
     "express": "^4.22.1",
+    "googleapis": "^128.0.0",
     "imap": "^0.8.19",
     "mailparser": "^3.9.1",
     "sqlite3": "^5.1.7"
