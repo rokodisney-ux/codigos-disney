@@ -2,10 +2,11 @@ require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
-const Database = require('./database');
-const EmailReader = require('./emailReader');
+require('dotenv').config();
 
-const app = express();
+// Usar Gmail API en lugar de IMAP
+const EmailReader = require('./emailReader-gmail-api');
+const Database = require('./database');
 const PORT = process.env.PORT || 3000;
 const db = new Database();
 const emailReader = new EmailReader();
@@ -38,12 +39,12 @@ app.get('/api/codigos/:email', async (req, res) => {
         
         console.log(`🔍 INICIANDO BÚSQUEDA para: ${email}`);
         console.log(`🔍 Estado del lector:`, {
-            imap: !!emailReader.imap,
+            gmail: !!emailReader.gmail,
             isRunning: emailReader.isRunning
         });
         
-        // SOLO buscar en Gmail - ignorar completamente la base de datos
-        if (emailReader.imap && emailReader.isRunning) {
+        // SOLO buscar en Gmail con API - ignorar completamente la base de datos
+        if (emailReader.gmail && emailReader.isRunning) {
             try {
                 console.log('🔍 Buscando en Gmail...');
                 const resultado = await emailReader.buscarUltimoCorreo(email);
@@ -79,7 +80,7 @@ app.get('/api/codigos/:email', async (req, res) => {
             }
         } else {
             console.log('❌ El lector de correos no está conectado');
-            console.log('❌ imap:', !!emailReader.imap);
+            console.log('❌ gmail:', !!emailReader.gmail);
             console.log('❌ isRunning:', emailReader.isRunning);
             res.status(404).json({ error: 'El servicio de búsqueda de correos no está disponible en este momento' });
             return;
@@ -138,7 +139,7 @@ app.get('/api/status', (req, res) => {
     res.json({
         status: 'online',
         emailReader: emailReader.isRunning,
-        readerType: 'IMAP Optimizado',
+        readerType: 'Gmail API',
         timestamp: new Date().toISOString()
     });
 });
@@ -185,11 +186,11 @@ app.listen(PORT, () => {
     console.log(`🚀 Servidor iniciado en http://localhost:${PORT}`);
     console.log(`📊 API disponible en http://localhost:${PORT}/api`);
     console.log(`🌐 Frontend disponible en http://localhost:${PORT}`);
-    console.log(`🔧 Usando IMAP Optimizado (multi-idioma)`);
+    console.log(`🔧 Usando Gmail API (multi-idioma)`);
     
     // Iniciar el lector de correos inmediatamente
     setTimeout(() => {
-        console.log('📧 Iniciando lector de correos con IMAP...');
+        console.log('📧 Iniciando lector de correos con Gmail API...');
         emailReader.iniciar();
     }, 1000);
 });
