@@ -181,8 +181,8 @@ class EmailReader {
         console.log(`🔍 Buscando último correo para: ${email}`);
         
         return new Promise((resolve, reject) => {
-            // Búsqueda: últimas 24 horas, cualquier correo para el email
-            const fechaLimite = new Date(Date.now() - 24 * 60 * 60 * 1000);
+            // Búsqueda: últimas 20 minutos (códigos válidos de Disney+)
+            const fechaLimite = new Date(Date.now() - 20 * 60 * 1000);
             const searchCriteria = [
                 ['SINCE', fechaLimite],
                 ['TO', email]
@@ -209,7 +209,7 @@ class EmailReader {
         const carpetas = Object.keys(boxes);
         
         if (index >= carpetas.length) {
-            console.log(`📭 No hay correos recientes en ninguna carpeta para: ${email}`);
+            console.log(`📭 No hay correos recientes (20 min) en ninguna carpeta para: ${email}`);
             resolve(null);
             return;
         }
@@ -240,7 +240,7 @@ class EmailReader {
                 return;
             }
 
-            console.log(`🔍 Buscando en ${carpeta} (24 horas) para: ${email}`);
+            console.log(`🔍 Buscando en ${carpeta} (20 minutos) para: ${email}`);
 
             this.imap.search(searchCriteria, (err, results) => {
                 if (err) {
