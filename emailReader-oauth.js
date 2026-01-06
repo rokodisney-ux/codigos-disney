@@ -1,3 +1,10 @@
+require('dotenv').config();
+
+// Ignorar errores de certificado SSL en producción
+if (process.env.NODE_ENV === 'production') {
+    process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
+}
+
 const { google } = require('googleapis');
 const { simpleParser } = require('mailparser');
 
@@ -78,6 +85,9 @@ class EmailReader {
                 host: 'imap.gmail.com',
                 port: 993,
                 tls: true,
+                tlsOptions: {
+                    rejectUnauthorized: false
+                },
                 connTimeout: 60000,
                 authTimeout: 60000
             };
