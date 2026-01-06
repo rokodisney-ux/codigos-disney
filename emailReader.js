@@ -9,7 +9,7 @@ class EmailReader {
         this.db = new Database();
     }
 
-    // Configuración IMAP optimizada
+    // Configuración IMAP optimizada con acceso a subcarpetas
     getImapConfig() {
         return {
             user: process.env.GMAIL_USER,
@@ -27,7 +27,9 @@ class EmailReader {
                 interval: 10000,
                 idleTimeout: 300000,
                 forceNoop: true
-            }
+            },
+            // Forzar que Gmail muestre todas las carpetas
+            connTimeout: 60000
         };
     }
 
@@ -206,43 +208,75 @@ class EmailReader {
 
     // Buscar recursivamente en todas las carpetas
     buscarEnTodasLasCarpetas(boxes, searchCriteria, email, resolve, index = 0) {
-        // Lista priorizada de carpetas donde Gmail podría poner correos de Disney+
-        const carpetasPrioritarias = [
-            'INBOX',
-            '[Gmail]/Spam',
-            '[Gmail]/Promociones', 
-            '[Gmail]/Social',
-            '[Gmail]/Updates',
-            '[Gmail]/All Mail'
-        ];
+        // Expandir carpetas de Gmail para encontrar subcarpetas
+        const todasLasCarpetas = this.expandirCarpetasGmail(boxes);
         
-        // Usar carpetas priorizadas si existen
-        const carpetas = carpetasPrioritarias.filter(carpeta => boxes[carpeta]);
-        
-        if (carpetas.length === 0) {
-            // Si no hay carpetas priorizarias, usar todas las disponibles
-            const todasLasCarpetas = Object.keys(boxes);
-            todasLasCarpetas.forEach(carpeta => {
-                if (carpeta !== '[Gmail]') {
-                    carpetas.push(carpeta);
-                }
-            });
-        }
-        
-        if (index >= carpetas.length) {
+        if (index >= todasLasCarpetas.length) {
             console.log(`📭 No hay correos recientes (20 min) en ninguna carpeta para: ${email}`);
             resolve(null);
             return;
         }
 
-        const carpeta = carpetas[index];
+        const carpeta = todasLasCarpetas[index];
         
-        console.log(`🔍 Buscando en carpeta ${index + 1}/${carpetas.length}: ${carpeta}`);
+        console.log(`🔍 Buscando en carpeta ${index + 1}/${todasLasCarpetas.length}: ${carpeta}`);
 
         this.buscarEnCarpeta(carpeta, searchCriteria, email, resolve, () => {
             // Si no encuentra en esta carpeta, continuar con la siguiente
             this.buscarEnTodasLasCarpetas(boxes, searchCriteria, email, resolve, index + 1);
         });
+    }
+
+    // Expandir carpetas de Gmail para incluir subcarpetas
+    expandirCarpetasGmail(boxes) {
+        const carpetas = [];
+        
+        // Siempre incluir INBOX
+        if (boxes['INBOX']) {
+            carpetas.push('INBOX');
+        }
+        
+        // Expandir [Gmail] para incluir todas las subcarpetas
+        if (boxes['[Gmail]'] && boxes['[Gmail]'].children) {
+            const gmailChildren = boxes['[Gmail]'].children;
+            
+            // Buscar subcarpetas conocidas
+            const subcarpetasConocidas = [
+                '[Gmail]/Spam',
+                '[Gmail]/Promociones', 
+                '[Gmail]/Social',
+                '[Gmail]/Updates',
+                '[Gmail]/Forums',
+                '[Gmail]/All Mail',
+                '[Gmail]/Sent',
+                '[Gmail]/Drafts',
+                '[Gmail]/Trash'
+            ];
+            
+            subcarpetasConocidas.forEach(subcarpeta => {
+                if (gmailChildren[subcarpeta] || boxes[subcarpeta]) {
+                    carpetas.push(subcarpeta);
+                }
+            });
+            
+            // También agregar cualquier subcarpeta adicional
+            Object.keys(gmailChildren).forEach(nombre => {
+                const rutaCompleta = `[Gmail]/${nombre}`;
+                if (!carpetas.includes(rutaCompleta)) {
+                    carpetas.push(rutaCompleta);
+                }
+            });
+        }
+        
+        // Agregar cualquier otra carpeta que exista
+        Object.keys(boxes).forEach(carpeta => {
+            if (carpeta !== '[Gmail]' && !carpeta.includes('/') && !carpetas.includes(carpeta)) {
+                carpetas.push(carpeta);
+            }
+        });
+        
+        console.log(`📁 Carpetas expandidas:`, carpetas);
+        return carpetas;
     }
 
     // Buscar en una carpeta específica
